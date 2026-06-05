@@ -282,6 +282,38 @@ body {
   box-shadow: var(--shadow-md);
 }
 
+.get-link-btn {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-light);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition-smooth);
+  z-index: 10;
+}
+
+.get-link-btn:hover {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  border-color: var(--text-primary);
+}
+
+.get-link-btn.copied {
+  background-color: #059669;
+  color: #ffffff;
+  border-color: #059669;
+}
+
 .card-icon-wrapper {
   width: 42px;
   height: 42px;
