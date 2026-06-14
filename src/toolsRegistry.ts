@@ -37,7 +37,7 @@ export const toolsRegistry: Tool[] = [
     id: 'mp4-to-mp3',
     name: 'MP4 to MP3',
     path: '/mp4tomp3',
-    description: 'Extract high-fidelity MP3 audio tracks directly from your MP4 videos.',
+    description: 'Extract high-fidelity MP3 audio tracks directly from your MP4 or MKV videos.',
     category: 'Audio & Video',
     iconName: 'Music',
     component: Mp4ToMp3,

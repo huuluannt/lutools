@@ -89,8 +89,11 @@ export default function Mp4ToMp3() {
   }, []);
 
   const selectFile = (selectedFile: File) => {
-    if (!selectedFile.type.startsWith('video/') && !selectedFile.name.endsWith('.mp4') && !selectedFile.name.endsWith('.m4v')) {
-      setErrorMsg('Please select a valid MP4 video file.');
+    const isVideoType = selectedFile.type.startsWith('video/');
+    const hasVideoExtension = /\.(mp4|m4v|mkv)$/i.test(selectedFile.name);
+    
+    if (!isVideoType && !hasVideoExtension) {
+      setErrorMsg('Please select a valid MP4 or MKV video file.');
       setStatus('error');
       setFile(null);
       return;
@@ -150,7 +153,7 @@ export default function Mp4ToMp3() {
         decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer);
       } catch (err) {
         console.error('Audio decoding error:', err);
-        throw new Error('This MP4 file does not have a supported audio track or the format is invalid.');
+        throw new Error('This video file does not have a supported audio track or the format is invalid.');
       } finally {
         await audioCtx.close();
       }
@@ -261,14 +264,14 @@ export default function Mp4ToMp3() {
                   type="file" 
                   ref={fileInputRef} 
                   onChange={handleFileChange} 
-                  accept="video/mp4, video/m4v, .mp4" 
+                  accept="video/mp4, video/m4v, video/x-matroska, .mp4, .mkv" 
                   style={{ display: 'none' }} 
                 />
                 <div className="upload-content">
                   <div className="icon-wrapper" style={{ width: '48px', height: '48px', marginBottom: '4px' }}>
                     <Upload size={24} />
                   </div>
-                  <h3 style={{ fontSize: '15px' }}>Drag & drop your MP4 file here</h3>
+                  <h3 style={{ fontSize: '15px' }}>Drag & drop your MP4 or MKV file here</h3>
                   <p style={{ fontSize: '12px' }}>Processed completely inside your browser.</p>
                   <p className="paste-hint" style={{ fontSize: '11px' }}>or press <strong>Ctrl + V</strong> to paste from clipboard</p>
                   <button className="btn-secondary" style={{ height: '34px', padding: '0 16px', fontSize: '12.5px', marginTop: '4px' }}>Browse Files</button>
