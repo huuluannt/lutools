@@ -2,6 +2,7 @@ import React from 'react';
 import ResizerImage from './pages/tools/ResizerImage';
 import ConverterChem from './pages/tools/ConverterChem';
 import Mp4ToMp3 from './pages/tools/Mp4ToMp3';
+import AudioToMp3 from './pages/tools/AudioToMp3';
 
 export interface Tool {
   id: string;
@@ -40,6 +41,15 @@ export const toolsRegistry: Tool[] = [
     category: 'Audio & Video',
     iconName: 'Music',
     component: Mp4ToMp3,
+  },
+  {
+    id: 'audio-to-mp3',
+    name: 'Audio to MP3',
+    path: '/audiotomp3',
+    description: 'Convert audio files (M4A, WAV, AAC, FLAC, and more) to high-quality MP3 directly in the browser.',
+    category: 'Audio & Video',
+    iconName: 'Volume2',
+    component: AudioToMp3,
   },
 ];
 
