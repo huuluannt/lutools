@@ -3,6 +3,7 @@ import ResizerImage from './pages/tools/ResizerImage';
 import ConverterChem from './pages/tools/ConverterChem';
 import Mp4ToMp3 from './pages/tools/Mp4ToMp3';
 import AudioToMp3 from './pages/tools/AudioToMp3';
+import TrimMp3 from './pages/tools/TrimMp3';
 
 export interface Tool {
   id: string;
@@ -51,6 +52,14 @@ export const toolsRegistry: Tool[] = [
     iconName: 'Volume2',
     component: AudioToMp3,
   },
+  {
+    id: 'trim-mp3',
+    name: 'Trim MP3',
+    path: '/trimmp3',
+    description: 'Trim MP3 audio precisely with a visual waveform and no loss in sound quality.',
+    category: 'Audio & Video',
+    iconName: 'Scissors',
+    component: TrimMp3,
+  },
 ];
-
 
