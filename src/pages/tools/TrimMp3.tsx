@@ -18,7 +18,7 @@ import type { Mp3Analysis, TrimmedMp3 } from './mp3TrimUtils';
 
 type ToolStatus = 'empty' | 'loading' | 'ready' | 'trimming' | 'done' | 'error';
 type DragMode = 'start' | 'end';
-type PlaybackMode = 'current' | 'start' | null;
+type PlaybackMode = 'current' | 'start' | 'end' | null;
 type TimeField = 'start' | 'end';
 
 interface Selection {
@@ -257,13 +257,17 @@ export default function TrimMp3() {
   }, [selectFile]);
 
   const updateSelection = useCallback((nextSelection: Selection) => {
-    pauseAudio();
+    const audio = audioRef.current;
+    if (audio && !audio.paused) {
+      playbackStopRef.current = duration;
+      setPlaybackMode('current');
+    }
     clearOutput();
     setTimeInputError(null);
     setStartInput(formatTime(nextSelection.start));
     setEndInput(formatTime(nextSelection.end));
     setSelection(nextSelection);
-  }, [clearOutput, pauseAudio]);
+  }, [clearOutput, duration]);
 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
@@ -319,9 +323,17 @@ export default function TrimMp3() {
   const handleTrackPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!waveformRef.current || duration <= 0) return;
     const bounds = waveformRef.current.getBoundingClientRect();
-    const time = clamp(((event.clientX - bounds.left) / bounds.width) * duration, 0, duration);
-    pauseAudio();
-    if (audioRef.current) audioRef.current.currentTime = time;
+    const audio = audioRef.current;
+    const isPlaying = Boolean(audio && !audio.paused);
+    const latestPlayableTime = isPlaying ? Math.max(0, duration - 0.01) : duration;
+    const time = clamp(((event.clientX - bounds.left) / bounds.width) * duration, 0, latestPlayableTime);
+    if (audio) {
+      if (isPlaying) {
+        playbackStopRef.current = duration;
+        setPlaybackMode('current');
+      }
+      audio.currentTime = time;
+    }
     setCurrentTime(time);
   };
 
@@ -431,8 +443,10 @@ export default function TrimMp3() {
     pauseAudio();
     const playbackStart = mode === 'start'
       ? selection.start
-      : clamp(currentTime, 0, Math.max(0, duration - 0.01));
-    playbackStopRef.current = mode === 'start' ? selection.end : duration;
+      : mode === 'end'
+        ? Math.max(0, selection.end - 10)
+        : clamp(currentTime, 0, Math.max(0, duration - 0.01));
+    playbackStopRef.current = mode === 'current' ? duration : selection.end;
     audio.currentTime = playbackStart;
     setCurrentTime(playbackStart);
 
@@ -684,6 +698,14 @@ export default function TrimMp3() {
               >
                 {playbackMode === 'start' ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
                 <span>{playbackMode === 'start' ? 'Pause Start' : 'Play Start'}</span>
+              </button>
+              <button
+                type="button"
+                className={`trim-play-button ${playbackMode === 'end' ? 'active' : ''}`}
+                onClick={() => void togglePlayback('end')}
+              >
+                {playbackMode === 'end' ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+                <span>{playbackMode === 'end' ? 'Pause End' : 'Play End'}</span>
               </button>
               <div className="trim-current-time">
                 <span>Current</span>
