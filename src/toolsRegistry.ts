@@ -4,6 +4,7 @@ import ConverterChem from './pages/tools/ConverterChem';
 import Mp4ToMp3 from './pages/tools/Mp4ToMp3';
 import AudioToMp3 from './pages/tools/AudioToMp3';
 import TrimMp3 from './pages/tools/TrimMp3';
+import TrimVideo from './pages/tools/TrimVideo';
 
 export interface Tool {
   id: string;
@@ -61,5 +62,13 @@ export const toolsRegistry: Tool[] = [
     iconName: 'Scissors',
     component: TrimMp3,
   },
+  {
+    id: 'trim-video',
+    name: 'Trim Video',
+    path: '/trimvideo',
+    description: 'Trim video visually with thumbnail previews while preserving the original stream quality.',
+    category: 'Audio & Video',
+    iconName: 'Clapperboard',
+    component: TrimVideo,
+  },
 ];
-
