@@ -1068,13 +1068,8 @@ body {
   border-top: 1px solid rgba(10, 10, 12, 0.16);
   border-bottom: 1px solid rgba(10, 10, 12, 0.16);
   background: rgba(10, 10, 12, 0.018);
-  cursor: grab;
+  pointer-events: none;
   touch-action: none;
-}
-
-.trim-selection:active,
-.trim-is-dragging .trim-selection {
-  cursor: grabbing;
 }
 
 .trim-handle {
@@ -1088,6 +1083,7 @@ body {
   background: transparent;
   color: var(--text-primary);
   cursor: ew-resize;
+  pointer-events: auto;
   touch-action: none;
 }
 
@@ -1181,15 +1177,63 @@ body {
   background: var(--bg-primary);
 }
 
-.trim-time-card span {
+.trim-time-card span,
+.trim-time-card label {
   color: var(--text-muted);
   font-size: 10.5px;
+}
+
+.trim-time-card label {
+  cursor: text;
 }
 
 .trim-time-card strong {
   font-size: 15px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+.trim-time-input {
+  width: min(100%, 150px);
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  transition: var(--transition-smooth);
+}
+
+.trim-time-input:hover {
+  border-color: var(--border-medium);
+  background: var(--bg-secondary);
+}
+
+.trim-time-input:focus {
+  border-color: var(--text-primary);
+  background: var(--bg-primary);
+  box-shadow: 0 0 0 1px var(--text-primary);
+}
+
+.trim-time-input.invalid {
+  border-color: #dc2626;
+  color: #b91c1c;
+  box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.12);
+}
+
+.trim-time-input-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -12px 26px 17px;
+  color: #b91c1c;
+  font-size: 11.5px;
 }
 
 .trim-time-card-duration {
@@ -1209,42 +1253,54 @@ body {
 .trim-playback-controls {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .trim-play-button {
-  width: 38px;
   height: 38px;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
   border: 1px solid var(--border-medium);
-  border-radius: 50%;
+  border-radius: var(--radius-md);
   background: var(--bg-primary);
   color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
   transition: var(--transition-smooth);
 }
 
-.trim-play-button:hover {
+.trim-play-button:hover,
+.trim-play-button.active {
   border-color: var(--text-primary);
   background: var(--text-primary);
   color: var(--bg-primary);
 }
 
-.trim-playback-controls > div {
+.trim-play-button span {
+  color: inherit;
+  font-size: inherit;
+}
+
+.trim-current-time {
+  min-width: 74px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding-left: 3px;
 }
 
-.trim-playback-controls span {
+.trim-current-time span {
   color: var(--text-muted);
   font-size: 10.5px;
 }
 
-.trim-playback-controls strong {
+.trim-current-time strong {
   font-size: 12.5px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -1404,10 +1460,34 @@ body {
     font-size: 14px;
   }
 
+  .trim-time-input {
+    font-size: 14px;
+  }
+
+  .trim-time-input-error {
+    margin: -7px 14px 14px;
+  }
+
   .trim-actions {
     align-items: stretch;
     flex-direction: column;
     padding: 14px;
+  }
+
+  .trim-playback-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .trim-play-button {
+    width: 100%;
+  }
+
+  .trim-current-time {
+    grid-column: 1 / -1;
+    align-items: center;
+    padding: 2px 0 0;
   }
 
   .trim-submit {

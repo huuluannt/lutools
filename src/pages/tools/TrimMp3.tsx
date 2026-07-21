@@ -17,7 +17,9 @@ import { analyzeMp3, trimMp3 } from './mp3TrimUtils';
 import type { Mp3Analysis, TrimmedMp3 } from './mp3TrimUtils';
 
 type ToolStatus = 'empty' | 'loading' | 'ready' | 'trimming' | 'done' | 'error';
-type DragMode = 'start' | 'end' | 'selection';
+type DragMode = 'start' | 'end';
+type PlaybackMode = 'current' | 'start' | null;
+type TimeField = 'start' | 'end';
 
 interface Selection {
   start: number;
@@ -29,6 +31,11 @@ interface DragState {
   originX: number;
   originStart: number;
   originEnd: number;
+}
+
+interface TimeInputError {
+  field: TimeField;
+  message: string;
 }
 
 function clamp(value: number, minimum: number, maximum: number) {
@@ -54,6 +61,24 @@ function formatTime(seconds: number, precise = true) {
   return hours > 0
     ? `${hours}:${minutes.toString().padStart(2, '0')}:${secondsText}`
     : `${minutes}:${secondsText}`;
+}
+
+function parseTimeInput(value: string) {
+  const normalizedValue = value.trim().replace(',', '.');
+  if (!normalizedValue) return null;
+
+  const parts = normalizedValue.split(':');
+  if (parts.length > 3 || parts.some((part) => part.trim() === '')) return null;
+  const values = parts.map(Number);
+  if (values.some((part) => !Number.isFinite(part) || part < 0)) return null;
+
+  if (values.length === 1) return values[0];
+  if (values.length === 2) {
+    if (values[1] >= 60) return null;
+    return values[0] * 60 + values[1];
+  }
+  if (values[1] >= 60 || values[2] >= 60) return null;
+  return values[0] * 3600 + values[1] * 60 + values[2];
 }
 
 function createWaveformPeaks(audioBuffer: AudioBuffer, pointCount = 1400) {
@@ -97,8 +122,11 @@ export default function TrimMp3() {
   const [output, setOutput] = useState<TrimmedMp3 | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackMode, setPlaybackMode] = useState<PlaybackMode>(null);
   const [currentTime, setCurrentTime] = useState(0);
+  const [startInput, setStartInput] = useState('0:00.00');
+  const [endInput, setEndInput] = useState('0:00.00');
+  const [timeInputError, setTimeInputError] = useState<TimeInputError | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -109,6 +137,7 @@ export default function TrimMp3() {
   const outputUrlRef = useRef<string | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const loadIdRef = useRef(0);
+  const playbackStopRef = useRef(0);
 
   const duration = analysis?.duration ?? 0;
   const minimumSelection = analysis?.frames[0]?.duration ?? 0.05;
@@ -123,7 +152,7 @@ export default function TrimMp3() {
 
   const pauseAudio = useCallback(() => {
     audioRef.current?.pause();
-    setIsPlaying(false);
+    setPlaybackMode(null);
   }, []);
 
   const resetTool = useCallback(() => {
@@ -138,10 +167,13 @@ export default function TrimMp3() {
     setAnalysis(null);
     setPeaks(null);
     setSelection({ start: 0, end: 0 });
+    setStartInput('0:00.00');
+    setEndInput('0:00.00');
     setSourceUrl(null);
     setOutputUrl(null);
     setOutput(null);
     setErrorMessage(null);
+    setTimeInputError(null);
     setCurrentTime(0);
     setStatus('empty');
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -198,6 +230,8 @@ export default function TrimMp3() {
       setAnalysis(mp3Analysis);
       setPeaks(createWaveformPeaks(audioBuffer));
       setSelection({ start: 0, end: mp3Analysis.duration });
+      setStartInput(formatTime(0));
+      setEndInput(formatTime(mp3Analysis.duration));
       setStatus('ready');
     } catch (error) {
       if (loadIdRef.current !== loadId) return;
@@ -223,9 +257,13 @@ export default function TrimMp3() {
   }, [selectFile]);
 
   const updateSelection = useCallback((nextSelection: Selection) => {
+    pauseAudio();
     clearOutput();
+    setTimeInputError(null);
+    setStartInput(formatTime(nextSelection.start));
+    setEndInput(formatTime(nextSelection.end));
     setSelection(nextSelection);
-  }, [clearOutput]);
+  }, [clearOutput, pauseAudio]);
 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
@@ -247,10 +285,6 @@ export default function TrimMp3() {
           start: drag.originStart,
           end: clamp(drag.originEnd + delta, drag.originStart + minimumSelection, duration),
         });
-      } else {
-        const selectionDuration = drag.originEnd - drag.originStart;
-        const start = clamp(drag.originStart + delta, 0, duration - selectionDuration);
-        updateSelection({ start, end: start + selectionDuration });
       }
     };
 
@@ -270,14 +304,14 @@ export default function TrimMp3() {
     };
   }, [duration, minimumSelection, updateSelection]);
 
-  const beginDrag = useCallback((mode: DragMode, event: React.PointerEvent, origin = selection) => {
+  const beginDrag = useCallback((mode: DragMode, event: React.PointerEvent) => {
     event.preventDefault();
     event.stopPropagation();
     dragRef.current = {
       mode,
       originX: event.clientX,
-      originStart: origin.start,
-      originEnd: origin.end,
+      originStart: selection.start,
+      originEnd: selection.end,
     };
     document.body.classList.add('trim-is-dragging');
   }, [selection]);
@@ -286,12 +320,9 @@ export default function TrimMp3() {
     if (!waveformRef.current || duration <= 0) return;
     const bounds = waveformRef.current.getBoundingClientRect();
     const time = clamp(((event.clientX - bounds.left) / bounds.width) * duration, 0, duration);
-    const mode: DragMode = Math.abs(time - selection.start) <= Math.abs(time - selection.end) ? 'start' : 'end';
-    const nextSelection = mode === 'start'
-      ? { start: clamp(time, 0, selection.end - minimumSelection), end: selection.end }
-      : { start: selection.start, end: clamp(time, selection.start + minimumSelection, duration) };
-    updateSelection(nextSelection);
-    beginDrag(mode, event, nextSelection);
+    pauseAudio();
+    if (audioRef.current) audioRef.current.currentTime = time;
+    setCurrentTime(time);
   };
 
   const handleHandleKeyDown = (mode: 'start' | 'end', event: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -310,6 +341,47 @@ export default function TrimMp3() {
         start: selection.start,
         end: clamp(selection.end + direction * step, selection.start + minimumSelection, duration),
       });
+    }
+  };
+
+  const commitTimeInput = (field: TimeField) => {
+    const value = field === 'start' ? startInput : endInput;
+    const parsedTime = parseTimeInput(value);
+    let validationMessage: string | null = null;
+
+    if (parsedTime === null) {
+      validationMessage = 'Use seconds, mm:ss, or hh:mm:ss.';
+    } else if (parsedTime > duration) {
+      validationMessage = `Time cannot be later than ${formatTime(duration)}.`;
+    } else if (field === 'start' && parsedTime > selection.end - minimumSelection) {
+      validationMessage = 'Start must be earlier than End.';
+    } else if (field === 'end' && parsedTime < selection.start + minimumSelection) {
+      validationMessage = 'End must be later than Start.';
+    }
+
+    if (validationMessage || parsedTime === null) {
+      setTimeInputError({ field, message: validationMessage ?? 'Enter a valid time.' });
+      if (field === 'start') setStartInput(formatTime(selection.start));
+      else setEndInput(formatTime(selection.end));
+      return;
+    }
+
+    setTimeInputError(null);
+    updateSelection(field === 'start'
+      ? { start: parsedTime, end: selection.end }
+      : { start: selection.start, end: parsedTime });
+  };
+
+  const handleTimeInputKeyDown = (field: TimeField, event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      commitTimeInput(field);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      if (field === 'start') setStartInput(formatTime(selection.start));
+      else setEndInput(formatTime(selection.end));
+      setTimeInputError(null);
+      event.currentTarget.blur();
     }
   };
 
@@ -347,33 +419,26 @@ export default function TrimMp3() {
     return () => resizeObserver.disconnect();
   }, [drawWaveform]);
 
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (audio.currentTime < selection.start || audio.currentTime > selection.end) {
-      audio.currentTime = selection.start;
-      setCurrentTime(selection.start);
-    }
-    if (!audio.paused && audio.currentTime >= selection.end) pauseAudio();
-  }, [pauseAudio, selection.end, selection.start]);
-
-  const togglePlayback = async () => {
+  const togglePlayback = async (mode: Exclude<PlaybackMode, null>) => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    if (!audio.paused) {
+    if (!audio.paused && playbackMode === mode) {
       pauseAudio();
       return;
     }
 
-    if (audio.currentTime < selection.start || audio.currentTime >= selection.end - 0.02) {
-      audio.currentTime = selection.start;
-      setCurrentTime(selection.start);
-    }
+    pauseAudio();
+    const playbackStart = mode === 'start'
+      ? selection.start
+      : clamp(currentTime, 0, Math.max(0, duration - 0.01));
+    playbackStopRef.current = mode === 'start' ? selection.end : duration;
+    audio.currentTime = playbackStart;
+    setCurrentTime(playbackStart);
 
     try {
       await audio.play();
-      setIsPlaying(true);
+      setPlaybackMode(mode);
     } catch {
       setErrorMessage('Playback could not start in this browser.');
     }
@@ -382,10 +447,10 @@ export default function TrimMp3() {
   const handleTimeUpdate = () => {
     const audio = audioRef.current;
     if (!audio) return;
-    if (!audio.paused && audio.currentTime >= selection.end - 0.015) {
+    if (!audio.paused && audio.currentTime >= playbackStopRef.current - 0.015) {
       audio.pause();
-      audio.currentTime = selection.end;
-      setIsPlaying(false);
+      audio.currentTime = playbackStopRef.current;
+      setPlaybackMode(null);
     }
     setCurrentTime(audio.currentTime);
   };
@@ -406,6 +471,8 @@ export default function TrimMp3() {
       setOutput(trimmed);
       setOutputUrl(nextOutputUrl);
       setSelection({ start: trimmed.start, end: trimmed.end });
+      setStartInput(formatTime(trimmed.start));
+      setEndInput(formatTime(trimmed.end));
       setCurrentTime(trimmed.start);
       setStatus('done');
     } catch (error) {
@@ -509,7 +576,7 @@ export default function TrimMp3() {
 
           <div className="trim-waveform-section">
             <div className="trim-waveform-topline">
-              <span>Waveform</span>
+              <span>Waveform · click anywhere to place the red playhead</span>
               <span><ShieldCheck size={13} /> Private · stays on your device</span>
             </div>
 
@@ -523,7 +590,6 @@ export default function TrimMp3() {
               <div
                 className="trim-selection"
                 style={{ left: `${startPercent}%`, width: `${Math.max(0, endPercent - startPercent)}%` }}
-                onPointerDown={(event) => beginDrag('selection', event)}
               >
                 <button
                   type="button"
@@ -552,26 +618,75 @@ export default function TrimMp3() {
 
           <div className="trim-readouts">
             <div className="trim-time-card">
-              <span>Start</span>
-              <strong>{formatTime(selection.start)}</strong>
+              <label htmlFor="trim-start-time">Start</label>
+              <input
+                id="trim-start-time"
+                className={`trim-time-input ${timeInputError?.field === 'start' ? 'invalid' : ''}`}
+                value={startInput}
+                inputMode="decimal"
+                spellCheck={false}
+                aria-invalid={timeInputError?.field === 'start'}
+                aria-describedby={timeInputError?.field === 'start' ? 'trim-time-error' : undefined}
+                onFocus={(event) => event.currentTarget.select()}
+                onChange={(event) => {
+                  setStartInput(event.target.value);
+                  setTimeInputError(null);
+                }}
+                onBlur={() => commitTimeInput('start')}
+                onKeyDown={(event) => handleTimeInputKeyDown('start', event)}
+              />
             </div>
             <div className="trim-time-card trim-time-card-duration">
               <span>Selected duration</span>
               <strong>{formatTime(selection.end - selection.start)}</strong>
             </div>
             <div className="trim-time-card">
-              <span>End</span>
-              <strong>{formatTime(selection.end)}</strong>
+              <label htmlFor="trim-end-time">End</label>
+              <input
+                id="trim-end-time"
+                className={`trim-time-input ${timeInputError?.field === 'end' ? 'invalid' : ''}`}
+                value={endInput}
+                inputMode="decimal"
+                spellCheck={false}
+                aria-invalid={timeInputError?.field === 'end'}
+                aria-describedby={timeInputError?.field === 'end' ? 'trim-time-error' : undefined}
+                onFocus={(event) => event.currentTarget.select()}
+                onChange={(event) => {
+                  setEndInput(event.target.value);
+                  setTimeInputError(null);
+                }}
+                onBlur={() => commitTimeInput('end')}
+                onKeyDown={(event) => handleTimeInputKeyDown('end', event)}
+              />
             </div>
           </div>
 
+          {timeInputError && (
+            <div id="trim-time-error" className="trim-time-input-error" role="alert">
+              <AlertCircle size={13} /> {timeInputError.message}
+            </div>
+          )}
+
           <div className="trim-actions">
             <div className="trim-playback-controls">
-              <button type="button" className="trim-play-button" onClick={() => void togglePlayback()} aria-label={isPlaying ? 'Pause selected audio' : 'Play selected audio'}>
-                {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
+              <button
+                type="button"
+                className={`trim-play-button ${playbackMode === 'current' ? 'active' : ''}`}
+                onClick={() => void togglePlayback('current')}
+              >
+                {playbackMode === 'current' ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+                <span>{playbackMode === 'current' ? 'Pause Current' : 'Play Current'}</span>
               </button>
-              <div>
-                <span>{isPlaying ? 'Playing selection' : 'Preview selection'}</span>
+              <button
+                type="button"
+                className={`trim-play-button ${playbackMode === 'start' ? 'active' : ''}`}
+                onClick={() => void togglePlayback('start')}
+              >
+                {playbackMode === 'start' ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+                <span>{playbackMode === 'start' ? 'Pause Start' : 'Play Start'}</span>
+              </button>
+              <div className="trim-current-time">
+                <span>Current</span>
                 <strong>{formatTime(currentTime)}</strong>
               </div>
             </div>
@@ -587,8 +702,8 @@ export default function TrimMp3() {
               src={sourceUrl}
               preload="metadata"
               onTimeUpdate={handleTimeUpdate}
-              onPause={() => setIsPlaying(false)}
-              onEnded={() => setIsPlaying(false)}
+              onPause={() => setPlaybackMode(null)}
+              onEnded={() => setPlaybackMode(null)}
             />
           )}
 
