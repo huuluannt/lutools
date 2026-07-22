@@ -2340,7 +2340,7 @@ body {
   background-position: center;
   background-size: cover;
   color: #fff;
-  cursor: default;
+  cursor: grab;
 }
 
 .clip-maker-block.sound {

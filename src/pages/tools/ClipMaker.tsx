@@ -57,6 +57,7 @@ interface PreviewTextDrag {
 }
 
 const FFMPEG_CORE_URL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm';
+const FFMPEG_MULTI_THREAD_CORE_URL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.10/dist/umd';
 const MIN_OBJECT_DURATION = 0.2;
 
 function createId(prefix: string) {
@@ -160,6 +161,7 @@ async function loadVideoClip(file: File, url: string): Promise<MakerClip> {
       trimEnd: video.duration,
       fadeIn: 0,
       fadeOut: 0,
+      volume: 1,
       width: video.videoWidth,
       height: video.videoHeight,
     };
@@ -189,6 +191,7 @@ async function loadImageClip(file: File, url: string): Promise<MakerClip> {
     trimEnd: 5,
     fadeIn: 0,
     fadeOut: 0,
+    volume: 1,
     width: image.naturalWidth,
     height: image.naturalHeight,
   };
@@ -239,6 +242,7 @@ async function loadSound(file: File, url: string, start: number): Promise<MakerS
       start,
       fadeIn: 0,
       fadeOut: 0,
+      volume: 1,
       peaks: await createAudioPeaks(file),
     };
   } finally {
@@ -326,6 +330,7 @@ export default function ClipMaker() {
   const selectedClip = selection?.type === 'clip' ? clips.find((clip) => clip.id === selection.id) ?? null : null;
   const selectedSound = selection?.type === 'sound' ? sounds.find((sound) => sound.id === selection.id) ?? null : null;
   const selectedText = selection?.type === 'text' ? texts.find((text) => text.id === selection.id) ?? null : null;
+  const selectedSegment = selectedClip ? clipSegments.find((segment) => segment.clip.id === selectedClip.id) : null;
 
   const invalidateOutput = useCallback(() => {
     if (outputUrlRef.current) URL.revokeObjectURL(outputUrlRef.current);
@@ -379,7 +384,7 @@ export default function ClipMaker() {
     if (!video || !currentSegment || currentSegment.clip.kind !== 'video') return;
     const expectedTime = currentSegment.clip.trimStart + clamp(playhead - currentSegment.start, 0, currentSegment.duration);
     if (Math.abs(video.currentTime - expectedTime) > 0.22) video.currentTime = expectedTime;
-    video.volume = currentClipOpacity;
+    video.volume = clamp(currentClipOpacity * currentSegment.clip.volume, 0, 1);
     if (isPlaying) {
       if (video.paused) void video.play().catch(() => setIsPlaying(false));
     } else if (!video.paused) {
@@ -404,7 +409,7 @@ export default function ClipMaker() {
       const fadeInVolume = sound.fadeIn > 0 ? clamp(localTime / sound.fadeIn, 0, 1) : 1;
       const remaining = duration - localTime;
       const fadeOutVolume = sound.fadeOut > 0 ? clamp(remaining / sound.fadeOut, 0, 1) : 1;
-      audio.volume = Math.min(fadeInVolume, fadeOutVolume);
+      audio.volume = clamp(sound.volume * Math.min(fadeInVolume, fadeOutVolume), 0, 1);
       if (isPlaying) {
         if (audio.paused) void audio.play().catch(() => undefined);
       } else if (!audio.paused) {
@@ -510,7 +515,7 @@ export default function ClipMaker() {
       start,
       duration: Math.min(3, Math.max(MIN_OBJECT_DURATION, totalDuration - start)),
       color: '#ffffff',
-      fontSize: 54,
+      fontSize: 30,
       fadeIn: 0,
       fadeOut: 0,
       x: 0.5,
@@ -600,6 +605,7 @@ export default function ClipMaker() {
           url,
           fadeIn: Number.isFinite(clip.fadeIn) ? clip.fadeIn : 0,
           fadeOut: Number.isFinite(clip.fadeOut) ? clip.fadeOut : 0,
+          volume: Number.isFinite(clip.volume) ? clamp(clip.volume, 0, 1) : 1,
           thumbnail: clip.kind === 'image' ? url : clip.thumbnail,
         };
       });
@@ -607,7 +613,12 @@ export default function ClipMaker() {
         const asset = assets[assetIndex];
         const url = URL.createObjectURL(asset);
         newUrls.push(url);
-        return { ...sound, file: asset, url };
+        return {
+          ...sound,
+          file: asset,
+          url,
+          volume: Number.isFinite(sound.volume) ? clamp(sound.volume, 0, 1) : 1,
+        };
       });
       const openedTexts = manifest.texts.map((text) => ({
         ...text,
@@ -696,6 +707,32 @@ export default function ClipMaker() {
       invalidateOutput();
 
       if (drag.type === 'clip') {
+        if (drag.action === 'move') {
+          const viewport = timelineViewportRef.current;
+          if (!viewport) return;
+          const bounds = viewport.getBoundingClientRect();
+          const pointerTime = (event.clientX - bounds.left + viewport.scrollLeft) / pixelsPerSecond;
+          setClips((current) => {
+            const currentIndex = current.findIndex((clip) => clip.id === drag.id);
+            if (currentIndex < 0) return current;
+            let targetIndex = current.length - 1;
+            let cursor = 0;
+            for (let index = 0; index < current.length; index += 1) {
+              const duration = clipDuration(current[index]);
+              if (pointerTime < cursor + duration / 2) {
+                targetIndex = index;
+                break;
+              }
+              cursor += duration;
+            }
+            if (targetIndex === currentIndex) return current;
+            const reordered = [...current];
+            const [dragged] = reordered.splice(currentIndex, 1);
+            reordered.splice(targetIndex, 0, dragged);
+            return reordered;
+          });
+          return;
+        }
         setClips((current) => current.map((clip) => {
           if (clip.id !== drag.id) return clip;
           if (drag.action === 'trim-start') {
@@ -813,24 +850,166 @@ export default function ClipMaker() {
     setTexts((current) => current.map((text) => text.id === selectedText.id ? { ...text, ...updates } : text));
   };
 
+  const canSplit = (() => {
+    if (selection?.type === 'clip' && selectedSegment) {
+      return playhead > selectedSegment.start + MIN_OBJECT_DURATION
+        && playhead < selectedSegment.end - MIN_OBJECT_DURATION;
+    }
+    if (selection?.type === 'sound' && selectedSound) {
+      return playhead > selectedSound.start + MIN_OBJECT_DURATION
+        && playhead < selectedSound.start + soundDuration(selectedSound) - MIN_OBJECT_DURATION;
+    }
+    if (selection?.type === 'text' && selectedText) {
+      return playhead > selectedText.start + MIN_OBJECT_DURATION
+        && playhead < selectedText.start + selectedText.duration - MIN_OBJECT_DURATION;
+    }
+    return false;
+  })();
+
+  const splitSelected = () => {
+    if (!selection || !canSplit) return;
+    invalidateOutput();
+
+    if (selection.type === 'clip' && selectedClip && selectedSegment) {
+      const splitSourceTime = selectedClip.trimStart + playhead - selectedSegment.start;
+      const rightId = createId('clip');
+      const rightUrl = URL.createObjectURL(selectedClip.file);
+      objectUrlsRef.current.add(rightUrl);
+      setClips((current) => {
+        const index = current.findIndex((clip) => clip.id === selectedClip.id);
+        if (index < 0) return current;
+        const leftDuration = splitSourceTime - selectedClip.trimStart;
+        const rightDuration = selectedClip.trimEnd - splitSourceTime;
+        const left = {
+          ...selectedClip,
+          trimEnd: splitSourceTime,
+          fadeIn: Math.min(selectedClip.fadeIn, leftDuration),
+          fadeOut: 0,
+        };
+        const right = {
+          ...selectedClip,
+          id: rightId,
+          url: rightUrl,
+          trimStart: splitSourceTime,
+          fadeIn: 0,
+          fadeOut: Math.min(selectedClip.fadeOut, rightDuration),
+        };
+        const next = [...current];
+        next.splice(index, 1, left, right);
+        return next;
+      });
+      setSelection({ type: 'clip', id: rightId });
+      return;
+    }
+
+    if (selection.type === 'sound' && selectedSound) {
+      const localTime = playhead - selectedSound.start;
+      const splitSourceTime = selectedSound.trimStart + localTime;
+      const rightId = createId('sound');
+      const rightUrl = URL.createObjectURL(selectedSound.file);
+      objectUrlsRef.current.add(rightUrl);
+      setSounds((current) => {
+        const index = current.findIndex((sound) => sound.id === selectedSound.id);
+        if (index < 0) return current;
+        const leftDuration = splitSourceTime - selectedSound.trimStart;
+        const rightDuration = selectedSound.trimEnd - splitSourceTime;
+        const left = {
+          ...selectedSound,
+          trimEnd: splitSourceTime,
+          fadeIn: Math.min(selectedSound.fadeIn, leftDuration),
+          fadeOut: 0,
+        };
+        const right = {
+          ...selectedSound,
+          id: rightId,
+          url: rightUrl,
+          start: playhead,
+          trimStart: splitSourceTime,
+          fadeIn: 0,
+          fadeOut: Math.min(selectedSound.fadeOut, rightDuration),
+        };
+        const next = [...current];
+        next.splice(index, 1, left, right);
+        return next;
+      });
+      setSelection({ type: 'sound', id: rightId });
+      return;
+    }
+
+    if (selection.type === 'text' && selectedText) {
+      const leftDuration = playhead - selectedText.start;
+      const rightId = createId('text');
+      const right = {
+        ...selectedText,
+        id: rightId,
+        start: playhead,
+        duration: selectedText.duration - leftDuration,
+        fadeIn: 0,
+        fadeOut: Math.min(selectedText.fadeOut, selectedText.duration - leftDuration),
+      };
+      setTexts((current) => {
+        const index = current.findIndex((text) => text.id === selectedText.id);
+        if (index < 0) return current;
+        const next = [...current];
+        next.splice(index, 1, {
+          ...selectedText,
+          duration: leftDuration,
+          fadeIn: Math.min(selectedText.fadeIn, leftDuration),
+          fadeOut: 0,
+        }, right);
+        return next;
+      });
+      setSelection({ type: 'text', id: rightId });
+    }
+  };
+
   const loadFfmpeg = async () => {
     if (ffmpegRef.current?.loaded) return ffmpegRef.current;
-    setExportProgress({ stage: 'Loading the export engine for the first time…', progress: 3 });
+    const canUseMultipleThreads = window.crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined';
+    setExportProgress({
+      stage: canUseMultipleThreads
+        ? 'Loading the faster multi-core export engine…'
+        : 'Loading the compatible export engine…',
+      progress: 3,
+    });
     const [{ FFmpeg }, { toBlobURL }] = await Promise.all([
       import('@ffmpeg/ffmpeg'),
       import('@ffmpeg/util'),
     ]);
-    const ffmpeg = new FFmpeg();
+    let ffmpeg = new FFmpeg();
     try {
-      await ffmpeg.load({
-        coreURL: await toBlobURL(`${FFMPEG_CORE_URL}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${FFMPEG_CORE_URL}/ffmpeg-core.wasm`, 'application/wasm'),
-      });
+      if (canUseMultipleThreads) {
+        const [coreURL, wasmURL, workerURL] = await Promise.all([
+          toBlobURL(`${FFMPEG_MULTI_THREAD_CORE_URL}/ffmpeg-core.js`, 'text/javascript'),
+          toBlobURL(`${FFMPEG_MULTI_THREAD_CORE_URL}/ffmpeg-core.wasm`, 'application/wasm'),
+          toBlobURL(`${FFMPEG_MULTI_THREAD_CORE_URL}/ffmpeg-core.worker.js`, 'text/javascript'),
+        ]);
+        await ffmpeg.load({ coreURL, wasmURL, workerURL });
+      } else {
+        await ffmpeg.load({
+          coreURL: await toBlobURL(`${FFMPEG_CORE_URL}/ffmpeg-core.js`, 'text/javascript'),
+          wasmURL: await toBlobURL(`${FFMPEG_CORE_URL}/ffmpeg-core.wasm`, 'application/wasm'),
+        });
+      }
       ffmpegRef.current = ffmpeg;
       return ffmpeg;
     } catch (error) {
       ffmpeg.terminate();
-      throw error;
+      if (!canUseMultipleThreads) throw error;
+
+      setExportProgress({ stage: 'Using the compatible export engine…', progress: 3 });
+      ffmpeg = new FFmpeg();
+      try {
+        await ffmpeg.load({
+          coreURL: await toBlobURL(`${FFMPEG_CORE_URL}/ffmpeg-core.js`, 'text/javascript'),
+          wasmURL: await toBlobURL(`${FFMPEG_CORE_URL}/ffmpeg-core.wasm`, 'application/wasm'),
+        });
+        ffmpegRef.current = ffmpeg;
+        return ffmpeg;
+      } catch (fallbackError) {
+        ffmpeg.terminate();
+        throw fallbackError;
+      }
     }
   };
 
@@ -854,8 +1033,6 @@ export default function ClipMaker() {
       setExporting(false);
     }
   };
-
-  const selectedSegment = selectedClip ? clipSegments.find((segment) => segment.clip.id === selectedClip.id) : null;
 
   return (
     <div className="tool-container clip-maker-tool fade-in">
@@ -903,6 +1080,15 @@ export default function ClipMaker() {
           </button>
           <button type="button" className="btn-secondary clip-maker-toolbar-button" onClick={addText} disabled={clips.length === 0 || exporting}>
             <Type size={15} /> Add Text
+          </button>
+          <button
+            type="button"
+            className="btn-secondary clip-maker-toolbar-button"
+            onClick={splitSelected}
+            disabled={!canSplit || exporting}
+            title="Split the selected object at the playhead"
+          >
+            <Scissors size={15} /> Split
           </button>
           <button type="button" className="btn-secondary clip-maker-toolbar-button clip-maker-project-button" onClick={() => projectInputRef.current?.click()} disabled={isImporting || exporting}>
             <FolderOpen size={15} /> Open Project
@@ -1050,7 +1236,20 @@ export default function ClipMaker() {
                       onChange={(event) => updateSelectedClip({ fadeOut: Number(event.target.value) })}
                     />
                   </label>
-                  <p className="clip-maker-inspector-hint">Drag the left or right handle on the clip to trim it. Following clips stay connected automatically.</p>
+                  {selectedClip.kind === 'video' && (
+                    <label className="clip-maker-field">
+                      <span>Volume <strong>{Math.round(selectedClip.volume * 100)}%</strong></span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={selectedClip.volume}
+                        onChange={(event) => updateSelectedClip({ volume: Number(event.target.value) })}
+                      />
+                    </label>
+                  )}
+                  <p className="clip-maker-inspector-hint">Drag the clip body to reorder it. Drag either handle to trim, or place the playhead inside it and use Split.</p>
                 </div>
               )}
 
@@ -1083,7 +1282,18 @@ export default function ClipMaker() {
                       onChange={(event) => updateSelectedSound({ fadeOut: Number(event.target.value) })}
                     />
                   </label>
-                  <p className="clip-maker-inspector-hint">Drag the sound body to move it. Drag either edge to trim the source audio.</p>
+                  <label className="clip-maker-field">
+                    <span>Volume <strong>{Math.round(selectedSound.volume * 100)}%</strong></span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={selectedSound.volume}
+                      onChange={(event) => updateSelectedSound({ volume: Number(event.target.value) })}
+                    />
+                  </label>
+                  <p className="clip-maker-inspector-hint">Drag the sound body to move it. Drag either edge to trim, or place the playhead inside it and use Split.</p>
                 </div>
               )}
 
@@ -1120,7 +1330,7 @@ export default function ClipMaker() {
                       onChange={(event) => updateSelectedText({ fadeOut: Number(event.target.value) })}
                     />
                   </label>
-                  <p className="clip-maker-inspector-hint">Drag the text directly on the video preview to position it. Drag its timeline block to move it in time or trim its duration.</p>
+                  <p className="clip-maker-inspector-hint">Drag text on the preview to position it. Drag its timeline block to move or trim it, or place the playhead inside it and use Split.</p>
                 </div>
               )}
             </aside>

@@ -12,6 +12,7 @@ export interface MakerClip {
   trimEnd: number;
   fadeIn: number;
   fadeOut: number;
+  volume: number;
   width: number;
   height: number;
 }
@@ -27,6 +28,7 @@ export interface MakerSound {
   start: number;
   fadeIn: number;
   fadeOut: number;
+  volume: number;
   peaks: number[];
 }
 

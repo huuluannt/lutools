@@ -138,6 +138,7 @@ export async function exportClipMakerProject(
             'asetpts=PTS-STARTPTS',
             'aresample=48000',
             'aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo',
+            `volume=${clampVolume(clip.volume).toFixed(3)}`,
             'apad',
             `atrim=duration=${seconds(duration)}`,
             ...fadeFilters(clip.fadeIn, clip.fadeOut, duration, true),
@@ -179,6 +180,7 @@ export async function exportClipMakerProject(
         'asetpts=PTS-STARTPTS',
         'aresample=48000',
         'aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo',
+        `volume=${clampVolume(sound.volume).toFixed(3)}`,
         ...fadeFilters(sound.fadeIn, sound.fadeOut, duration, true),
         `adelay=${delay}|${delay}`,
       ];
@@ -245,5 +247,10 @@ export async function exportClipMakerProject(
 
 function clampPosition(value: number) {
   if (!Number.isFinite(value)) return 0.5;
+  return Math.min(1, Math.max(0, value));
+}
+
+function clampVolume(value: number) {
+  if (!Number.isFinite(value)) return 1;
   return Math.min(1, Math.max(0, value));
 }
