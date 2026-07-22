@@ -4,12 +4,14 @@ import {
   CheckCircle2,
   Download,
   Film,
+  FolderOpen,
   Image as ImageIcon,
   Music2,
   Pause,
   Play,
   Plus,
   RotateCcw,
+  Save,
   Scissors,
   Trash2,
   Type,
@@ -20,6 +22,7 @@ import {
 } from 'lucide-react';
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
 import { exportClipMakerProject } from './clipMakerExport';
+import { createClipMakerProjectFile, readClipMakerProjectFile } from './clipMakerProject';
 import type {
   ExportProgress,
   MakerClip,
@@ -47,6 +50,10 @@ interface ClipSegment {
   start: number;
   end: number;
   duration: number;
+}
+
+interface PreviewTextDrag {
+  id: string;
 }
 
 const FFMPEG_CORE_URL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm';
@@ -151,6 +158,8 @@ async function loadVideoClip(file: File, url: string): Promise<MakerClip> {
       sourceDuration: video.duration,
       trimStart: 0,
       trimEnd: video.duration,
+      fadeIn: 0,
+      fadeOut: 0,
       width: video.videoWidth,
       height: video.videoHeight,
     };
@@ -178,6 +187,8 @@ async function loadImageClip(file: File, url: string): Promise<MakerClip> {
     sourceDuration: 60,
     trimStart: 0,
     trimEnd: 5,
+    fadeIn: 0,
+    fadeOut: 0,
     width: image.naturalWidth,
     height: image.naturalHeight,
   };
@@ -244,6 +255,12 @@ function soundDuration(sound: MakerSound) {
   return Math.max(MIN_OBJECT_DURATION, sound.trimEnd - sound.trimStart);
 }
 
+function fadeOpacity(localTime: number, duration: number, fadeIn: number, fadeOut: number) {
+  const fadeInOpacity = fadeIn > 0 ? clamp(localTime / fadeIn, 0, 1) : 1;
+  const fadeOutOpacity = fadeOut > 0 ? clamp((duration - localTime) / fadeOut, 0, 1) : 1;
+  return Math.min(fadeInOpacity, fadeOutOpacity);
+}
+
 export default function ClipMaker() {
   const [clips, setClips] = useState<MakerClip[]>([]);
   const [sounds, setSounds] = useState<MakerSound[]>([]);
@@ -261,9 +278,12 @@ export default function ClipMaker() {
 
   const clipInputRef = useRef<HTMLInputElement>(null);
   const soundInputRef = useRef<HTMLInputElement>(null);
+  const projectInputRef = useRef<HTMLInputElement>(null);
   const previewVideoRef = useRef<HTMLVideoElement>(null);
+  const previewStageRef = useRef<HTMLDivElement>(null);
   const timelineViewportRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<TimelineDrag | null>(null);
+  const previewTextDragRef = useRef<PreviewTextDrag | null>(null);
   const soundRefs = useRef(new Map<string, HTMLAudioElement>());
   const objectUrlsRef = useRef(new Set<string>());
   const outputUrlRef = useRef<string | null>(null);
@@ -294,6 +314,14 @@ export default function ClipMaker() {
       ?? null;
   }, [clipSegments, playhead]);
   const activeTexts = texts.filter((text) => playhead >= text.start && playhead < text.start + text.duration);
+  const currentClipOpacity = currentSegment
+    ? fadeOpacity(
+        playhead - currentSegment.start,
+        currentSegment.duration,
+        currentSegment.clip.fadeIn,
+        currentSegment.clip.fadeOut,
+      )
+    : 1;
 
   const selectedClip = selection?.type === 'clip' ? clips.find((clip) => clip.id === selection.id) ?? null : null;
   const selectedSound = selection?.type === 'sound' ? sounds.find((sound) => sound.id === selection.id) ?? null : null;
@@ -351,12 +379,13 @@ export default function ClipMaker() {
     if (!video || !currentSegment || currentSegment.clip.kind !== 'video') return;
     const expectedTime = currentSegment.clip.trimStart + clamp(playhead - currentSegment.start, 0, currentSegment.duration);
     if (Math.abs(video.currentTime - expectedTime) > 0.22) video.currentTime = expectedTime;
+    video.volume = currentClipOpacity;
     if (isPlaying) {
       if (video.paused) void video.play().catch(() => setIsPlaying(false));
     } else if (!video.paused) {
       video.pause();
     }
-  }, [currentSegment, isPlaying, playhead]);
+  }, [currentClipOpacity, currentSegment, isPlaying, playhead]);
 
   useEffect(() => {
     sounds.forEach((sound) => {
@@ -482,6 +511,10 @@ export default function ClipMaker() {
       duration: Math.min(3, Math.max(MIN_OBJECT_DURATION, totalDuration - start)),
       color: '#ffffff',
       fontSize: 54,
+      fadeIn: 0,
+      fadeOut: 0,
+      x: 0.5,
+      y: 0.5,
     };
     invalidateOutput();
     setTexts((current) => [...current, text]);
@@ -531,6 +564,76 @@ export default function ClipMaker() {
     setPlayhead(0);
     setErrorMessage(null);
     setExportProgress({ stage: '', progress: 0 });
+  };
+
+  const saveProject = () => {
+    if (clips.length === 0) return;
+    setErrorMessage(null);
+    try {
+      const projectFile = createClipMakerProjectFile(clips, sounds, texts, pixelsPerSecond);
+      const url = URL.createObjectURL(projectFile);
+      const link = document.createElement('a');
+      const date = new Date().toISOString().slice(0, 10);
+      link.href = url;
+      link.download = `clip-maker-${date}.luclip`;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'The project could not be saved.');
+    }
+  };
+
+  const openProject = async (file: File) => {
+    setIsImporting(true);
+    setIsPlaying(false);
+    setErrorMessage(null);
+    const newUrls: string[] = [];
+    try {
+      const { manifest, assets } = await readClipMakerProjectFile(file);
+      const openedClips = manifest.clips.map(({ assetIndex, ...clip }) => {
+        const asset = assets[assetIndex];
+        const url = URL.createObjectURL(asset);
+        newUrls.push(url);
+        return {
+          ...clip,
+          file: asset,
+          url,
+          fadeIn: Number.isFinite(clip.fadeIn) ? clip.fadeIn : 0,
+          fadeOut: Number.isFinite(clip.fadeOut) ? clip.fadeOut : 0,
+          thumbnail: clip.kind === 'image' ? url : clip.thumbnail,
+        };
+      });
+      const openedSounds = manifest.sounds.map(({ assetIndex, ...sound }) => {
+        const asset = assets[assetIndex];
+        const url = URL.createObjectURL(asset);
+        newUrls.push(url);
+        return { ...sound, file: asset, url };
+      });
+      const openedTexts = manifest.texts.map((text) => ({
+        ...text,
+        fadeIn: Number.isFinite(text.fadeIn) ? text.fadeIn : 0,
+        fadeOut: Number.isFinite(text.fadeOut) ? text.fadeOut : 0,
+        x: Number.isFinite(text.x) ? clamp(text.x, 0, 1) : 0.5,
+        y: Number.isFinite(text.y) ? clamp(text.y, 0, 1) : 0.5,
+      }));
+
+      clips.forEach((clip) => revokeAsset(clip.url));
+      sounds.forEach((sound) => revokeAsset(sound.url));
+      newUrls.forEach((url) => objectUrlsRef.current.add(url));
+      invalidateOutput();
+      setClips(openedClips);
+      setSounds(openedSounds);
+      setTexts(openedTexts);
+      setPixelsPerSecond(clamp(manifest.pixelsPerSecond || 64, 36, 128));
+      setSelection(null);
+      setPlayhead(0);
+      setExportProgress({ stage: '', progress: 0 });
+    } catch (error) {
+      newUrls.forEach((url) => URL.revokeObjectURL(url));
+      setErrorMessage(error instanceof Error ? error.message : 'The project could not be opened.');
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const beginTimelineDrag = (
@@ -596,10 +699,14 @@ export default function ClipMaker() {
         setClips((current) => current.map((clip) => {
           if (clip.id !== drag.id) return clip;
           if (drag.action === 'trim-start') {
-            return { ...clip, trimStart: clamp(drag.trimStart + delta, 0, drag.trimEnd - MIN_OBJECT_DURATION) };
+            const trimStart = clamp(drag.trimStart + delta, 0, drag.trimEnd - MIN_OBJECT_DURATION);
+            const duration = drag.trimEnd - trimStart;
+            return { ...clip, trimStart, fadeIn: Math.min(clip.fadeIn, duration), fadeOut: Math.min(clip.fadeOut, duration) };
           }
           if (drag.action === 'trim-end') {
-            return { ...clip, trimEnd: clamp(drag.trimEnd + delta, drag.trimStart + MIN_OBJECT_DURATION, clip.sourceDuration) };
+            const trimEnd = clamp(drag.trimEnd + delta, drag.trimStart + MIN_OBJECT_DURATION, clip.sourceDuration);
+            const duration = trimEnd - drag.trimStart;
+            return { ...clip, trimEnd, fadeIn: Math.min(clip.fadeIn, duration), fadeOut: Math.min(clip.fadeOut, duration) };
           }
           return clip;
         }));
@@ -632,9 +739,17 @@ export default function ClipMaker() {
           }
           if (drag.action === 'trim-start') {
             const adjustedDelta = clamp(delta, -drag.start, drag.duration - MIN_OBJECT_DURATION);
-            return { ...text, start: drag.start + adjustedDelta, duration: drag.duration - adjustedDelta };
+            const duration = drag.duration - adjustedDelta;
+            return {
+              ...text,
+              start: drag.start + adjustedDelta,
+              duration,
+              fadeIn: Math.min(text.fadeIn, duration),
+              fadeOut: Math.min(text.fadeOut, duration),
+            };
           }
-          return { ...text, duration: clamp(drag.duration + delta, MIN_OBJECT_DURATION, totalDuration - drag.start) };
+          const duration = clamp(drag.duration + delta, MIN_OBJECT_DURATION, totalDuration - drag.start);
+          return { ...text, duration, fadeIn: Math.min(text.fadeIn, duration), fadeOut: Math.min(text.fadeOut, duration) };
         }));
       }
     };
@@ -659,6 +774,31 @@ export default function ClipMaker() {
     const bounds = viewport.getBoundingClientRect();
     const x = event.clientX - bounds.left + viewport.scrollLeft;
     seekTo(x / pixelsPerSecond);
+  };
+
+  const moveTextOnPreview = (id: string, event: React.PointerEvent<HTMLDivElement>) => {
+    const stage = previewStageRef.current;
+    if (!stage) return;
+    const bounds = stage.getBoundingClientRect();
+    const x = clamp((event.clientX - bounds.left) / bounds.width, 0, 1);
+    const y = clamp((event.clientY - bounds.top) / bounds.height, 0, 1);
+    invalidateOutput();
+    setTexts((current) => current.map((text) => text.id === id ? { ...text, x, y } : text));
+  };
+
+  const beginPreviewTextDrag = (id: string, event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    previewTextDragRef.current = { id };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setSelection({ type: 'text', id });
+    moveTextOnPreview(id, event);
+  };
+
+  const updateSelectedClip = (updates: Partial<MakerClip>) => {
+    if (!selectedClip) return;
+    invalidateOutput();
+    setClips((current) => current.map((clip) => clip.id === selectedClip.id ? { ...clip, ...updates } : clip));
   };
 
   const updateSelectedSound = (updates: Partial<MakerSound>) => {
@@ -720,8 +860,19 @@ export default function ClipMaker() {
   return (
     <div className="tool-container clip-maker-tool fade-in">
       <div className="tool-header clip-maker-heading">
-        <p className="tool-subtitle">Build a simple video from sequential clips, movable sound and text layers, then export a complete MP4.</p>
+        <p className="tool-subtitle">Build a complete video, save the editable project locally, and export a finished MP4.</p>
         <div className="clip-maker-toolbar">
+          <input
+            ref={projectInputRef}
+            type="file"
+            accept=".luclip,application/x-lutools-clip"
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void openProject(file);
+              event.target.value = '';
+            }}
+          />
           <input
             ref={clipInputRef}
             type="file"
@@ -753,6 +904,12 @@ export default function ClipMaker() {
           <button type="button" className="btn-secondary clip-maker-toolbar-button" onClick={addText} disabled={clips.length === 0 || exporting}>
             <Type size={15} /> Add Text
           </button>
+          <button type="button" className="btn-secondary clip-maker-toolbar-button clip-maker-project-button" onClick={() => projectInputRef.current?.click()} disabled={isImporting || exporting}>
+            <FolderOpen size={15} /> Open Project
+          </button>
+          <button type="button" className="btn-secondary clip-maker-toolbar-button clip-maker-project-button" onClick={saveProject} disabled={clips.length === 0 || isImporting || exporting}>
+            <Save size={15} /> Save Project
+          </button>
           <span className="clip-maker-toolbar-spacer" />
           {clips.length > 0 && (
             <button type="button" className="clip-maker-reset" onClick={resetProject} disabled={exporting}>
@@ -765,6 +922,8 @@ export default function ClipMaker() {
           </button>
         </div>
       </div>
+
+      {errorMessage && <div className="clip-maker-error" role="alert"><AlertCircle size={16} /><span>{errorMessage}</span><button type="button" onClick={() => setErrorMessage(null)}>Dismiss</button></div>}
 
       {clips.length === 0 ? (
         <div
@@ -787,24 +946,38 @@ export default function ClipMaker() {
         <>
           <div className="clip-maker-workspace">
             <section className="clip-maker-preview-panel">
-              <div className="clip-maker-preview-stage">
+              <div ref={previewStageRef} className="clip-maker-preview-stage">
                 {currentSegment?.clip.kind === 'video' ? (
                   <video
                     key={currentSegment.clip.id}
                     ref={previewVideoRef}
                     src={currentSegment.clip.url}
                     className="clip-maker-preview-media"
+                    style={{ opacity: currentClipOpacity }}
                     playsInline
                     preload="auto"
                   />
                 ) : currentSegment?.clip.kind === 'image' ? (
-                  <img src={currentSegment.clip.url} className="clip-maker-preview-media" alt="Current visual clip" />
+                  <img src={currentSegment.clip.url} className="clip-maker-preview-media" style={{ opacity: currentClipOpacity }} alt="Current visual clip" />
                 ) : null}
-                {activeTexts.map((text, index) => (
+                {activeTexts.map((text) => (
                   <div
                     key={text.id}
-                    className="clip-maker-text-overlay"
-                    style={{ color: text.color, fontSize: `${text.fontSize}px`, transform: `translate(-50%, calc(-50% + ${index * 1.3}em))` }}
+                    className={`clip-maker-text-overlay ${selection?.type === 'text' && selection.id === text.id ? 'selected' : ''}`}
+                    style={{
+                      color: text.color,
+                      fontSize: `${text.fontSize}px`,
+                      left: `${text.x * 100}%`,
+                      top: `${text.y * 100}%`,
+                      opacity: fadeOpacity(playhead - text.start, text.duration, text.fadeIn, text.fadeOut),
+                    }}
+                    title="Drag to position text"
+                    onPointerDown={(event) => beginPreviewTextDrag(text.id, event)}
+                    onPointerMove={(event) => {
+                      if (previewTextDragRef.current?.id === text.id) moveTextOnPreview(text.id, event);
+                    }}
+                    onPointerUp={() => { previewTextDragRef.current = null; }}
+                    onPointerCancel={() => { previewTextDragRef.current = null; }}
                   >
                     {text.text}
                   </div>
@@ -855,6 +1028,28 @@ export default function ClipMaker() {
                     <div><span>Source in</span><strong>{formatTime(selectedClip.trimStart)}</strong></div>
                     <div><span>Source out</span><strong>{formatTime(selectedClip.trimEnd)}</strong></div>
                   </div>
+                  <label className="clip-maker-field">
+                    <span>Fade in <strong>{selectedClip.fadeIn.toFixed(1)}s</strong></span>
+                    <input
+                      type="range"
+                      min="0"
+                      max={Math.min(10, selectedSegment.duration)}
+                      step="0.1"
+                      value={selectedClip.fadeIn}
+                      onChange={(event) => updateSelectedClip({ fadeIn: Number(event.target.value) })}
+                    />
+                  </label>
+                  <label className="clip-maker-field">
+                    <span>Fade out <strong>{selectedClip.fadeOut.toFixed(1)}s</strong></span>
+                    <input
+                      type="range"
+                      min="0"
+                      max={Math.min(10, selectedSegment.duration)}
+                      step="0.1"
+                      value={selectedClip.fadeOut}
+                      onChange={(event) => updateSelectedClip({ fadeOut: Number(event.target.value) })}
+                    />
+                  </label>
                   <p className="clip-maker-inspector-hint">Drag the left or right handle on the clip to trim it. Following clips stay connected automatically.</p>
                 </div>
               )}
@@ -903,15 +1098,35 @@ export default function ClipMaker() {
                     <label className="clip-maker-field"><span>Color</span><input type="color" value={selectedText.color} onChange={(event) => updateSelectedText({ color: event.target.value })} /></label>
                     <label className="clip-maker-field"><span>Size</span><input type="number" min="18" max="120" value={selectedText.fontSize} onChange={(event) => updateSelectedText({ fontSize: clamp(Number(event.target.value), 18, 120) })} /></label>
                   </div>
-                  <p className="clip-maker-inspector-hint">Text is centered in this first version. Drag the block to move it in time or trim its duration.</p>
+                  <label className="clip-maker-field">
+                    <span>Fade in <strong>{selectedText.fadeIn.toFixed(1)}s</strong></span>
+                    <input
+                      type="range"
+                      min="0"
+                      max={Math.min(10, selectedText.duration)}
+                      step="0.1"
+                      value={selectedText.fadeIn}
+                      onChange={(event) => updateSelectedText({ fadeIn: Number(event.target.value) })}
+                    />
+                  </label>
+                  <label className="clip-maker-field">
+                    <span>Fade out <strong>{selectedText.fadeOut.toFixed(1)}s</strong></span>
+                    <input
+                      type="range"
+                      min="0"
+                      max={Math.min(10, selectedText.duration)}
+                      step="0.1"
+                      value={selectedText.fadeOut}
+                      onChange={(event) => updateSelectedText({ fadeOut: Number(event.target.value) })}
+                    />
+                  </label>
+                  <p className="clip-maker-inspector-hint">Drag the text directly on the video preview to position it. Drag its timeline block to move it in time or trim its duration.</p>
                 </div>
               )}
             </aside>
           </div>
 
           {isImporting && <div className="clip-maker-notice"><div className="spinner" /> Importing and analyzing media…</div>}
-          {errorMessage && <div className="clip-maker-error" role="alert"><AlertCircle size={16} /><span>{errorMessage}</span><button type="button" onClick={() => setErrorMessage(null)}>Dismiss</button></div>}
-
           <section className="clip-maker-timeline-panel">
             <div className="clip-maker-timeline-topbar">
               <div><strong>Timeline</strong><span>{clips.length} clip{clips.length === 1 ? '' : 's'} · {sounds.length} sound{sounds.length === 1 ? '' : 's'} · {texts.length} text</span></div>

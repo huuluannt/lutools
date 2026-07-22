@@ -10,6 +10,8 @@ export interface MakerClip {
   sourceDuration: number;
   trimStart: number;
   trimEnd: number;
+  fadeIn: number;
+  fadeOut: number;
   width: number;
   height: number;
 }
@@ -35,6 +37,10 @@ export interface MakerText {
   duration: number;
   color: string;
   fontSize: number;
+  fadeIn: number;
+  fadeOut: number;
+  x: number;
+  y: number;
 }
 
 export type MakerSelection =

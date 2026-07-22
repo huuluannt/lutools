@@ -1881,7 +1881,22 @@ body {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
-  pointer-events: none;
+  padding: 3px 6px;
+  transform: translate(-50%, -50%);
+  border: 1px dashed transparent;
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+}
+
+.clip-maker-text-overlay:active {
+  cursor: grabbing;
+}
+
+.clip-maker-text-overlay.selected {
+  border-color: rgba(255, 255, 255, 0.72);
+  border-radius: 4px;
 }
 
 .clip-maker-preview-controls {
@@ -2555,7 +2570,6 @@ body {
     width: 100%;
   }
 
-  .clip-maker-toolbar-button:nth-of-type(3),
   .clip-maker-export-button {
     grid-column: 1 / -1;
   }
