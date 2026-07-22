@@ -24,6 +24,7 @@ import type { FFmpeg } from '@ffmpeg/ffmpeg';
 import { exportClipMakerProject } from './clipMakerExport';
 import { createClipMakerProjectFile, readClipMakerProjectFile } from './clipMakerProject';
 import type {
+  ExportOrientation,
   ExportProgress,
   MakerClip,
   MakerSelection,
@@ -273,6 +274,7 @@ export default function ClipMaker() {
   const [playhead, setPlayhead] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [pixelsPerSecond, setPixelsPerSecond] = useState(64);
+  const [outputOrientation, setOutputOrientation] = useState<ExportOrientation>('landscape');
   const [isImporting, setIsImporting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -305,6 +307,9 @@ export default function ClipMaker() {
   const totalDuration = clipSegments.at(-1)?.end ?? 0;
   const timelineDuration = Math.max(12, totalDuration);
   const timelineWidth = Math.max(720, timelineDuration * pixelsPerSecond);
+  const outputDimensions = outputOrientation === 'portrait'
+    ? { width: 720, height: 1280 }
+    : { width: 1280, height: 720 };
   const tickStep = pixelsPerSecond >= 90 ? 1 : pixelsPerSecond >= 55 ? 2 : 5;
   const rulerTicks = useMemo(
     () => Array.from({ length: Math.ceil(timelineDuration / tickStep) + 1 }, (_, index) => index * tickStep),
@@ -418,7 +423,7 @@ export default function ClipMaker() {
     });
   }, [isPlaying, playhead, sounds]);
 
-  const togglePlayback = () => {
+  const togglePlayback = useCallback(() => {
     if (totalDuration <= 0) return;
     if (isPlaying) {
       setIsPlaying(false);
@@ -443,7 +448,22 @@ export default function ClipMaker() {
       }
     });
     setIsPlaying(true);
-  };
+  }, [currentSegment, isPlaying, playhead, sounds, totalDuration]);
+
+  useEffect(() => {
+    const handleKeyboardPlayback = (event: KeyboardEvent) => {
+      if (event.code !== 'Space' || event.repeat) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && (
+        target.isContentEditable
+        || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName)
+      )) return;
+      event.preventDefault();
+      togglePlayback();
+    };
+    window.addEventListener('keydown', handleKeyboardPlayback);
+    return () => window.removeEventListener('keydown', handleKeyboardPlayback);
+  }, [togglePlayback]);
 
   const importClips = async (files: FileList | File[]) => {
     setIsImporting(true);
@@ -509,15 +529,17 @@ export default function ClipMaker() {
   const addText = () => {
     if (totalDuration <= 0) return;
     const start = Math.min(playhead, Math.max(0, totalDuration - MIN_OBJECT_DURATION));
+    const duration = Math.min(3, Math.max(MIN_OBJECT_DURATION, totalDuration - start));
+    const defaultFade = Math.min(0.5, duration);
     const text: MakerText = {
       id: createId('text'),
       text: 'Your text',
       start,
-      duration: Math.min(3, Math.max(MIN_OBJECT_DURATION, totalDuration - start)),
+      duration,
       color: '#ffffff',
       fontSize: 30,
-      fadeIn: 0,
-      fadeOut: 0,
+      fadeIn: defaultFade,
+      fadeOut: defaultFade,
       x: 0.5,
       y: 0.5,
     };
@@ -567,6 +589,7 @@ export default function ClipMaker() {
     setTexts([]);
     setSelection(null);
     setPlayhead(0);
+    setOutputOrientation('landscape');
     setErrorMessage(null);
     setExportProgress({ stage: '', progress: 0 });
   };
@@ -575,7 +598,13 @@ export default function ClipMaker() {
     if (clips.length === 0) return;
     setErrorMessage(null);
     try {
-      const projectFile = createClipMakerProjectFile(clips, sounds, texts, pixelsPerSecond);
+      const projectFile = createClipMakerProjectFile(
+        clips,
+        sounds,
+        texts,
+        pixelsPerSecond,
+        outputOrientation,
+      );
       const url = URL.createObjectURL(projectFile);
       const link = document.createElement('a');
       const date = new Date().toISOString().slice(0, 10);
@@ -636,6 +665,7 @@ export default function ClipMaker() {
       setSounds(openedSounds);
       setTexts(openedTexts);
       setPixelsPerSecond(clamp(manifest.pixelsPerSecond || 64, 36, 128));
+      setOutputOrientation(manifest.orientation === 'portrait' ? 'portrait' : 'landscape');
       setSelection(null);
       setPlayhead(0);
       setExportProgress({ stage: '', progress: 0 });
@@ -1021,7 +1051,14 @@ export default function ClipMaker() {
     setExporting(true);
     try {
       const ffmpeg = await loadFfmpeg();
-      const blob = await exportClipMakerProject(ffmpeg, clips, sounds, texts, setExportProgress);
+      const blob = await exportClipMakerProject(
+        ffmpeg,
+        clips,
+        sounds,
+        texts,
+        outputOrientation,
+        setExportProgress,
+      );
       const url = URL.createObjectURL(blob);
       outputUrlRef.current = url;
       setOutputBlob(blob);
@@ -1096,6 +1133,21 @@ export default function ClipMaker() {
           <button type="button" className="btn-secondary clip-maker-toolbar-button clip-maker-project-button" onClick={saveProject} disabled={clips.length === 0 || isImporting || exporting}>
             <Save size={15} /> Save Project
           </button>
+          <label className="clip-maker-orientation">
+            <span>Canvas</span>
+            <select
+              value={outputOrientation}
+              onChange={(event) => {
+                invalidateOutput();
+                setOutputOrientation(event.target.value as ExportOrientation);
+              }}
+              disabled={exporting}
+              aria-label="Video output orientation"
+            >
+              <option value="landscape">Landscape 16:9</option>
+              <option value="portrait">Portrait 9:16</option>
+            </select>
+          </label>
           <span className="clip-maker-toolbar-spacer" />
           {clips.length > 0 && (
             <button type="button" className="clip-maker-reset" onClick={resetProject} disabled={exporting}>
@@ -1132,7 +1184,8 @@ export default function ClipMaker() {
         <>
           <div className="clip-maker-workspace">
             <section className="clip-maker-preview-panel">
-              <div ref={previewStageRef} className="clip-maker-preview-stage">
+              <div className="clip-maker-preview-viewport">
+                <div ref={previewStageRef} className={`clip-maker-preview-stage ${outputOrientation}`}>
                 {currentSegment?.clip.kind === 'video' ? (
                   <video
                     key={currentSegment.clip.id}
@@ -1168,9 +1221,10 @@ export default function ClipMaker() {
                     {text.text}
                   </div>
                 ))}
+                </div>
               </div>
               <div className="clip-maker-preview-controls">
-                <button type="button" className="clip-maker-play" onClick={togglePlayback} aria-label={isPlaying ? 'Pause preview' : 'Play preview'}>
+                <button type="button" className="clip-maker-play" onClick={togglePlayback} title="Play / Pause (Space)" aria-label={isPlaying ? 'Pause preview' : 'Play preview'}>
                   {isPlaying ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
                 </button>
                 <strong>{formatTime(playhead)}</strong>
@@ -1186,6 +1240,7 @@ export default function ClipMaker() {
                   />
                 </div>
                 <span>{formatTime(totalDuration)}</span>
+                <kbd>Space</kbd>
               </div>
             </section>
 
@@ -1424,7 +1479,7 @@ export default function ClipMaker() {
             <section className="clip-maker-export-panel" aria-live="polite">
               <div className="clip-maker-export-status">
                 {outputUrl ? <CheckCircle2 size={18} /> : <div className="spinner" />}
-                <div><strong>{exportProgress.stage}</strong><span>{outputBlob ? `${formatBytes(outputBlob.size)} · 1280 × 720 MP4` : 'Keep this tab open while your project renders.'}</span></div>
+                <div><strong>{exportProgress.stage}</strong><span>{outputBlob ? `${formatBytes(outputBlob.size)} · ${outputDimensions.width} × ${outputDimensions.height} MP4` : 'Keep this tab open while your project renders.'}</span></div>
                 <b>{exportProgress.progress}%</b>
               </div>
               <div className="clip-maker-export-progress"><div style={{ width: `${exportProgress.progress}%` }} /></div>

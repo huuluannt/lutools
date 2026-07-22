@@ -1,4 +1,4 @@
-import type { MakerClip, MakerSound, MakerText } from './clipMakerTypes';
+import type { ExportOrientation, MakerClip, MakerSound, MakerText } from './clipMakerTypes';
 
 const PROJECT_MAGIC = 'LUCLIP1\n';
 const PROJECT_MIME = 'application/x-lutools-clip';
@@ -23,6 +23,7 @@ export interface ClipMakerProjectManifest {
   version: 1;
   createdAt: string;
   pixelsPerSecond: number;
+  orientation: ExportOrientation;
   assets: ProjectAsset[];
   clips: ProjectClip[];
   sounds: ProjectSound[];
@@ -52,6 +53,7 @@ export function createClipMakerProjectFile(
   sounds: MakerSound[],
   texts: MakerText[],
   pixelsPerSecond: number,
+  orientation: ExportOrientation,
 ) {
   const files: File[] = [];
   const assets: ProjectAsset[] = [];
@@ -59,6 +61,7 @@ export function createClipMakerProjectFile(
     version: 1,
     createdAt: new Date().toISOString(),
     pixelsPerSecond,
+    orientation,
     assets,
     clips: clips.map(({ file, url, ...clip }) => {
       void url;

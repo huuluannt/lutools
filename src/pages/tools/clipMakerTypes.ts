@@ -1,4 +1,5 @@
 export type ClipKind = 'video' | 'image';
+export type ExportOrientation = 'landscape' | 'portrait';
 
 export interface MakerClip {
   id: string;

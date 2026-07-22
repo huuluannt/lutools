@@ -1,8 +1,6 @@
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
-import type { ExportProgress, MakerClip, MakerSound, MakerText } from './clipMakerTypes';
+import type { ExportOrientation, ExportProgress, MakerClip, MakerSound, MakerText } from './clipMakerTypes';
 
-const OUTPUT_WIDTH = 1280;
-const OUTPUT_HEIGHT = 720;
 const OUTPUT_FPS = 30;
 const FONT_URL = 'https://raw.githubusercontent.com/ffmpegwasm/testdata/master/arial.ttf';
 
@@ -69,11 +67,14 @@ export async function exportClipMakerProject(
   clips: MakerClip[],
   sounds: MakerSound[],
   texts: MakerText[],
+  orientation: ExportOrientation,
   onProgress: (progress: ExportProgress) => void,
 ) {
   if (clips.length === 0) throw new Error('Add at least one video or image clip before exporting.');
 
   const { fetchFile } = await import('@ffmpeg/util');
+  const outputWidth = orientation === 'portrait' ? 720 : 1280;
+  const outputHeight = orientation === 'portrait' ? 1280 : 720;
   const filesToDelete = new Set<string>();
   const totalDuration = clips.reduce((total, clip) => total + clipDuration(clip), 0);
   const activeSounds = sounds.filter((sound) => sound.start < totalDuration && soundDuration(sound) > 0);
@@ -123,8 +124,8 @@ export async function exportClipMakerProject(
       const videoParts = [
         `[${index}:v]trim=duration=${seconds(duration)}`,
         'setpts=PTS-STARTPTS',
-        `scale=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease`,
-        `pad=${OUTPUT_WIDTH}:${OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2:color=black`,
+        `scale=${outputWidth}:${outputHeight}:force_original_aspect_ratio=decrease`,
+        `pad=${outputWidth}:${outputHeight}:(ow-iw)/2:(oh-ih)/2:color=black`,
         'setsar=1',
         `fps=${OUTPUT_FPS}`,
         'format=yuv420p',
