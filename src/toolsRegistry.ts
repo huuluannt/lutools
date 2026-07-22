@@ -5,6 +5,7 @@ import Mp4ToMp3 from './pages/tools/Mp4ToMp3';
 import AudioToMp3 from './pages/tools/AudioToMp3';
 import TrimMp3 from './pages/tools/TrimMp3';
 import TrimVideo from './pages/tools/TrimVideo';
+import ClipMaker from './pages/tools/ClipMaker';
 
 export interface Tool {
   id: string;
@@ -70,5 +71,14 @@ export const toolsRegistry: Tool[] = [
     category: 'Audio & Video',
     iconName: 'Clapperboard',
     component: TrimVideo,
+  },
+  {
+    id: 'clip-maker',
+    name: 'Clip Maker',
+    path: '/clipmaker',
+    description: 'Create simple videos from visual clips, sound, and text on an editable timeline.',
+    category: 'Audio & Video',
+    iconName: 'Clapperboard',
+    component: ClipMaker,
   },
 ];

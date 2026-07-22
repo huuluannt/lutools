@@ -1732,3 +1732,878 @@ body {
     margin-left: 14px;
   }
 }
+
+/* Clip Maker */
+.clip-maker-tool {
+  max-width: 1440px;
+  padding-top: 22px;
+  padding-bottom: 52px;
+}
+
+.clip-maker-heading {
+  gap: 14px;
+}
+
+.clip-maker-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.clip-maker-toolbar-button,
+.clip-maker-export-button {
+  height: 36px;
+  padding: 0 13px;
+  font-size: 12px;
+}
+
+.clip-maker-toolbar-spacer {
+  flex: 1;
+}
+
+.clip-maker-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 9px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.clip-maker-reset:hover {
+  color: var(--text-primary);
+}
+
+.clip-maker-toolbar button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.clip-maker-empty {
+  min-height: 520px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 13px;
+  padding: 44px 24px;
+  border: 1px dashed var(--border-medium);
+  border-radius: var(--radius-lg);
+  background: var(--bg-primary);
+  text-align: center;
+}
+
+.clip-maker-empty-icon {
+  width: 58px;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.clip-maker-empty h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.clip-maker-empty p {
+  max-width: 480px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.clip-maker-empty > span {
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+
+.clip-maker-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 310px;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.clip-maker-preview-panel,
+.clip-maker-inspector,
+.clip-maker-timeline-panel,
+.clip-maker-export-panel {
+  overflow: hidden;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  background: var(--bg-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.clip-maker-preview-panel {
+  min-width: 0;
+}
+
+.clip-maker-preview-stage {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  max-height: 510px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #09090b;
+}
+
+.clip-maker-preview-media {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #09090b;
+}
+
+.clip-maker-text-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 3;
+  max-width: 88%;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
+
+.clip-maker-preview-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 14px;
+  border-top: 1px solid var(--border-light);
+  background: #fdfdfd;
+}
+
+.clip-maker-play {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--text-primary);
+  border-radius: 50%;
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  cursor: pointer;
+}
+
+.clip-maker-preview-controls strong,
+.clip-maker-preview-controls > span {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.clip-maker-preview-controls > span {
+  color: var(--text-muted);
+}
+
+.clip-maker-preview-scrubber {
+  flex: 1;
+}
+
+.clip-maker-preview-scrubber input,
+.clip-maker-field input[type='range'] {
+  width: 100%;
+  accent-color: var(--text-primary);
+}
+
+.clip-maker-inspector {
+  min-height: 370px;
+}
+
+.clip-maker-inspector-title {
+  height: 43px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border-light);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.55px;
+  text-transform: uppercase;
+}
+
+.clip-maker-inspector-title button {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.clip-maker-inspector-title button:hover {
+  background: rgba(220, 38, 38, 0.07);
+  color: #dc2626;
+}
+
+.clip-maker-inspector-empty {
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 28px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.clip-maker-inspector-empty p {
+  max-width: 210px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.clip-maker-inspector-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+}
+
+.clip-maker-object-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.clip-maker-object-heading > svg {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  background: #f0f0f2;
+}
+
+.clip-maker-object-heading.sound > svg {
+  background: #f1edff;
+  color: #6541b9;
+}
+
+.clip-maker-object-heading.text > svg {
+  background: #eaf3ff;
+  color: #2e68a7;
+}
+
+.clip-maker-object-heading > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.clip-maker-object-heading strong {
+  overflow: hidden;
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clip-maker-object-heading span {
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+
+.clip-maker-property-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.clip-maker-property-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+}
+
+.clip-maker-property-grid span,
+.clip-maker-field > span {
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+
+.clip-maker-property-grid strong {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.clip-maker-inspector-hint {
+  color: var(--text-muted);
+  font-size: 10.8px;
+  line-height: 1.45;
+}
+
+.clip-maker-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.clip-maker-field > span {
+  display: flex;
+  justify-content: space-between;
+}
+
+.clip-maker-field > span strong {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.clip-maker-field textarea,
+.clip-maker-field input[type='number'] {
+  width: 100%;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  outline: none;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+
+.clip-maker-field textarea {
+  min-height: 66px;
+  padding: 9px;
+  resize: vertical;
+}
+
+.clip-maker-field input[type='number'] {
+  height: 34px;
+  padding: 0 9px;
+}
+
+.clip-maker-field textarea:focus,
+.clip-maker-field input[type='number']:focus {
+  border-color: var(--text-primary);
+}
+
+.clip-maker-inline-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.clip-maker-field input[type='color'] {
+  width: 100%;
+  height: 34px;
+  padding: 3px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+}
+
+.clip-maker-notice,
+.clip-maker-error {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 12px;
+  padding: 10px 13px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.clip-maker-notice .spinner {
+  width: 17px;
+  height: 17px;
+}
+
+.clip-maker-error {
+  border-color: rgba(220, 38, 38, 0.15);
+  background: rgba(220, 38, 38, 0.035);
+  color: #b91c1c;
+}
+
+.clip-maker-error span {
+  flex: 1;
+}
+
+.clip-maker-error button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.clip-maker-timeline-panel {
+  margin-top: 16px;
+}
+
+.clip-maker-timeline-topbar {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 13px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.clip-maker-timeline-topbar > div:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.clip-maker-timeline-topbar strong {
+  font-size: 12.5px;
+}
+
+.clip-maker-timeline-topbar span {
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+
+.clip-maker-zoom {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.clip-maker-zoom button {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.clip-maker-zoom span {
+  min-width: 38px;
+  text-align: center;
+}
+
+.clip-maker-timeline-grid {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+}
+
+.clip-maker-track-labels {
+  z-index: 5;
+  display: grid;
+  grid-template-rows: 28px 58px 52px 48px;
+  border-right: 1px solid var(--border-light);
+  background: #fbfbfc;
+}
+
+.clip-maker-track-labels > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border-light);
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+.clip-maker-timeline-viewport {
+  overflow-x: auto;
+  overflow-y: hidden;
+  cursor: crosshair;
+}
+
+.clip-maker-timeline-content {
+  position: relative;
+  min-height: 186px;
+  background-color: #fcfcfd;
+  background-image: linear-gradient(to right, rgba(0, 0, 0, 0.028) 1px, transparent 1px);
+  background-size: 64px 100%;
+}
+
+.clip-maker-ruler {
+  position: relative;
+  height: 28px;
+  border-bottom: 1px solid var(--border-light);
+  background: #fafafb;
+}
+
+.clip-maker-ruler span {
+  position: absolute;
+  top: 7px;
+  transform: translateX(4px);
+  color: var(--text-muted);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.clip-maker-ruler span::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: -4px;
+  width: 1px;
+  height: 5px;
+  background: var(--border-medium);
+}
+
+.clip-maker-track {
+  position: relative;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.clip-maker-track.clip-track {
+  height: 58px;
+}
+
+.clip-maker-track.sound-track {
+  height: 52px;
+  background: rgba(100, 65, 185, 0.015);
+}
+
+.clip-maker-track.text-track {
+  height: 48px;
+  background: rgba(46, 104, 167, 0.015);
+}
+
+.clip-maker-block {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  min-width: 13px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 5px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.clip-maker-block:active {
+  cursor: grabbing;
+}
+
+.clip-maker-block.visual {
+  top: 4px;
+  bottom: 4px;
+  background-color: #35353a;
+  background-position: center;
+  background-size: cover;
+  color: #fff;
+  cursor: default;
+}
+
+.clip-maker-block.sound {
+  background: #dcd1ff;
+  color: #3c276d;
+}
+
+.clip-maker-block.text {
+  background: #cfe5ff;
+  color: #1e4f83;
+}
+
+.clip-maker-block.selected {
+  border-color: #000;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px #000;
+  z-index: 3;
+}
+
+.clip-maker-block > span {
+  position: absolute;
+  left: 13px;
+  right: 13px;
+  top: 50%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  transform: translateY(-50%);
+  font-size: 9.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+}
+
+.clip-maker-block.sound > span,
+.clip-maker-block.text > span {
+  text-shadow: none;
+}
+
+.clip-maker-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 4;
+  width: 10px;
+  padding: 0;
+  border: 0;
+  background: rgba(10, 10, 12, 0.82);
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.clip-maker-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 2px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  border-left: 1px solid rgba(255, 255, 255, 0.8);
+  border-right: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+.clip-maker-handle.left {
+  left: 0;
+}
+
+.clip-maker-handle.right {
+  right: 0;
+}
+
+.clip-maker-waveform {
+  position: absolute;
+  inset: 5px 11px;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  opacity: 0.34;
+  pointer-events: none;
+}
+
+.clip-maker-waveform i {
+  min-width: 1px;
+  flex: 1;
+  max-width: 3px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+.clip-maker-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 6;
+  width: 1px;
+  background: #ef4444;
+  pointer-events: none;
+}
+
+.clip-maker-playhead span {
+  position: absolute;
+  top: 1px;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  transform: translateX(-50%);
+  border-radius: 2px 2px 50% 50%;
+  background: #ef4444;
+}
+
+.clip-maker-export-panel {
+  margin-top: 16px;
+  padding: 16px;
+}
+
+.clip-maker-export-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.clip-maker-export-status > svg {
+  color: #059669;
+}
+
+.clip-maker-export-status .spinner {
+  width: 19px;
+  height: 19px;
+}
+
+.clip-maker-export-status > div:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.clip-maker-export-status strong {
+  font-size: 12.5px;
+}
+
+.clip-maker-export-status span {
+  color: var(--text-muted);
+  font-size: 10.8px;
+}
+
+.clip-maker-export-status b {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.clip-maker-export-progress {
+  height: 5px;
+  overflow: hidden;
+  margin-top: 11px;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+}
+
+.clip-maker-export-progress > div {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--text-primary);
+  transition: width 0.25s ease;
+}
+
+.clip-maker-output {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 14px;
+  align-items: end;
+  margin-top: 16px;
+}
+
+.clip-maker-output video {
+  width: 100%;
+  max-height: 420px;
+  border-radius: var(--radius-md);
+  background: #09090b;
+}
+
+.clip-maker-output a {
+  text-decoration: none;
+}
+
+@media (max-width: 960px) {
+  .clip-maker-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .clip-maker-inspector {
+    min-height: auto;
+  }
+
+  .clip-maker-inspector-empty {
+    min-height: 120px;
+  }
+
+  .clip-maker-inspector-body {
+    display: grid;
+    grid-template-columns: minmax(180px, 0.7fr) minmax(240px, 1fr);
+    align-items: start;
+  }
+
+  .clip-maker-inspector-hint {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 700px) {
+  .tool-container.clip-maker-tool {
+    padding: 16px 12px 30px;
+  }
+
+  .clip-maker-toolbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .clip-maker-toolbar-button,
+  .clip-maker-export-button {
+    width: 100%;
+  }
+
+  .clip-maker-toolbar-button:nth-of-type(3),
+  .clip-maker-export-button {
+    grid-column: 1 / -1;
+  }
+
+  .clip-maker-toolbar-spacer {
+    display: none;
+  }
+
+  .clip-maker-reset {
+    justify-content: center;
+  }
+
+  .clip-maker-empty {
+    min-height: 410px;
+  }
+
+  .clip-maker-preview-controls {
+    gap: 7px;
+    padding: 0 9px;
+  }
+
+  .clip-maker-preview-controls strong,
+  .clip-maker-preview-controls > span {
+    font-size: 10px;
+  }
+
+  .clip-maker-text-overlay {
+    font-size: clamp(20px, 7vw, 42px) !important;
+  }
+
+  .clip-maker-inspector-body {
+    display: flex;
+  }
+
+  .clip-maker-timeline-grid {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .clip-maker-track-labels > div {
+    padding: 0 7px;
+    font-size: 9.5px;
+  }
+
+  .clip-maker-timeline-topbar > div:first-child span {
+    display: none;
+  }
+
+  .clip-maker-output {
+    grid-template-columns: 1fr;
+  }
+}
